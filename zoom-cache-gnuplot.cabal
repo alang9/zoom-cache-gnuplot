@@ -34,7 +34,7 @@ Maintainer:          me@alang.ca
 -- A copyright notice.
 -- Copyright:           
 
-Category:            Game
+Category:            Graphics, Data
 
 Build-type:          Simple
 
@@ -59,3 +59,6 @@ Executable zoom-cache-gnuplot
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
   
+source-repository head
+  type: git
+  location: git://github.com/alang9/zoom-cache-gnuplot.git
