@@ -10,57 +10,58 @@
 -- Plotting zoom-cache files with gnuplot
 ----------------------------------------------------------------------
 
+module Data.ZoomCache.Gnuplot
+    ( plot
+    ) where
+
+import Data.Maybe
 import qualified Data.Iteratee as I
 
-import Data.ZoomCache.Common
+import qualified Data.Iteratee.ZoomCache as Z
+import qualified Data.ZoomCache.Common as Z
+import qualified Data.ZoomCache.Read as Z
+import qualified Data.ZoomCache.Summary as Z
 import Graphics.Gnuplot.Simple
 
-plot :: FilePath -> TrackNo -> Int -> IO ()
+plot :: FilePath -> Z.TrackNo -> Int -> IO ()
 plot fp tn lvl = do
   streams <- getStreams fp tn
-  let candles = map getSummaryCandleVals $ mayMaybe maybeSummaryLevel streams
+  let candles = map getSummaryCandleVals $ mapMaybe maybeSummaryLevel streams
   plotListStyle [] (defaultStyle{plotType = CandleSticks}) candles
 
-zoomEither :: (Stream a -> b) -> FilePath -> TrackNo -> IO b
+zoomEither :: (Z.Stream a -> b) -> FilePath -> Z.TrackNo -> IO b
 zoomEither fun fp tn = do
-  cf <- getCacheFile fp
-  let t = getTrackType tn cf
+  cf <- Z.getCacheFile fp
+  let t = Z.getTrackType tn cf
   case t of
-    Just ZDouble -> I.fileDriverRandom
-                       (mapTrack tn (fun :: Stream Double -> IO ()))
+    Just Z.ZDouble -> I.fileDriverRandom
+                       (Z.mapTrack tn (fun :: Z.Stream Double -> IO ()))
                        fp
-    Just ZInt -> I.fileDriverRandom
-                       (mapTrack tn (fun :: Stream Int -> IO ()))
+    Just Z.ZInt -> I.fileDriverRandom
+                       (Z.mapTrack tn (fun :: Z.Stream Int -> IO ()))
                        fp
     Nothing -> fail "Invalid Track"
 
 
-mapTrack :: (Functor m, MonadIO m, ZReadable a)
-         => TrackNo -> (Stream a -> )
-         -> Iteratee [Word8] m ()
-mapTrack n = I.joinI . (enumStreamFromCF n) . I.mapChunks
-
-
-
-listStreams :: C a => FilePath -> TrackNo -> IO [Stream a]
-listStreams fp tn =
-    I.fileDriverRandom (I.joinI $ enumStreamFromCF tn getChunks) fp
+getStreams :: FilePath -> Z.TrackNo -> IO [Z.Stream a]
+getStreams fp tn =
+    I.fileDriverRandom (I.joinI $ Z.enumStreamFromCF tn I.getChunks) fp
 
 -- As things stand, we are doing too much processing after running the
 -- iteratee. Most of it can be moved before.
 
-maybeSummaryLevel :: Int -> Stream a -> Maybe (Summary a)
-maybeSummaryLevel _ (StreamPacket _ _ _) = Nothing
-maybeSummaryLevel lvl (StreamSummary file tn sum) =
-    case summaryLevel sum of
+maybeSummaryLevel :: Int -> Z.Stream a -> Maybe (Z.Summary a)
+maybeSummaryLevel _ (Z.StreamPacket _ _ _) = Nothing
+maybeSummaryLevel lvl (Z.StreamSummary file tn sum) =
+    case Z.summaryLevel sum of
       lvl -> Just sum
       _   -> Nothing
-maybeSummaryLevel _ StreamNull = Nothing
+maybeSummaryLevel _ Z.StreamNull = Nothing
 
-getSummaryCandleVals :: Summary a -> (TimeStamp, (a, a, a, a))
-getSummaryCandleVals s = ( summaryCloseTime s
-                         , ( summaryOpen s
-                           , summaryMin s
-                           , summaryMax s
-                           , summaryClose s
+getSummaryCandleVals :: Z.Summary a -> (Z.TimeStamp, (a, a, a, a))
+getSummaryCandleVals s = ( Z.summaryCloseTime s
+                         , ( Z.summaryOpen s
+                           , Z.summaryMin s
+                           , Z.summaryMax s
+                           , Z.summaryClose s
                          ))
