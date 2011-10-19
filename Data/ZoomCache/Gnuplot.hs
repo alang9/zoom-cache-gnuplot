@@ -74,3 +74,8 @@ getSummaryCandleVals s = ( Z.summaryCloseTime s
                            , Z.summaryMax s
                            , Z.summaryClose s
                          ))
+
+getSummaryAvgs :: Z.Summary a -> (Z.TimeStamp, Double)
+getSummaryAvgs s = ( Z.summaryCloseTime s
+                   , Z.summaryAvg s
+                   )
