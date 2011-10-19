@@ -16,9 +16,9 @@ data ParseError = ParseError
 
 parseTrack :: String -> Either ParseError (FilePath, TrackNo, Int)
 parseTrack arg =
-      case w of
-        [w1, w2, w3] -> Right (w1, read w2, read w3)
-        _ ->  Left ParseError
+    case w of
+      [w1, w2, w3] -> Right (w1, read w2, read w3)
+      _ ->  Left ParseError
   where
     w = words arg
     words :: String -> [String]
