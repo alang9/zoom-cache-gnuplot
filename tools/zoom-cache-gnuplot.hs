@@ -43,8 +43,16 @@ parseCustom s =
     Custom s1 [s2]
       where (s1, s2) = break (=='=') s
 
+options :: [OptDescr (Options -> Options)]
+options =
+    []
+
 parseOpts :: [String] -> IO (Options, [String])
-parseOpts s = return (defaultOptions, s)
+parseOpts argv =
+    case getOpt Permute options argv of
+      (o, n, []) -> return (foldl (flip id) defaultOptions o, n)
+      (_, _, errs) -> ioError (userError (concat errs ++ usageInfo header options))
+        where header = "Usage: zoom-cache-gnuplot ..."
 
 main :: IO ()
 main = do
