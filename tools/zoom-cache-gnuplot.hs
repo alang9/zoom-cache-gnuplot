@@ -41,6 +41,6 @@ main = do
               streams <- getStreams fp tn :: IO [Stream Int]
               plotSummaries lvl streams
           Just ZDouble -> do
-              streams <- getStreams fp tn :: IO [Stream Int]
+              streams <- getStreams fp tn :: IO [Stream Double]
               plotSummaries lvl streams
           Nothing -> return ()
