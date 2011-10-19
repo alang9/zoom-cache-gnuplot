@@ -11,7 +11,8 @@
 ----------------------------------------------------------------------
 
 module Data.ZoomCache.Gnuplot
-    ( plot
+    ( plotSummaries
+    , getStreams
     ) where
 
 import Data.Maybe
@@ -21,29 +22,45 @@ import qualified Data.Iteratee.ZoomCache as Z
 import qualified Data.ZoomCache.Common as Z
 import qualified Data.ZoomCache.Read as Z
 import qualified Data.ZoomCache.Summary as Z
+import Graphics.Gnuplot.Value.Tuple
 import Graphics.Gnuplot.Simple
 
-plot :: FilePath -> Z.TrackNo -> Int -> IO ()
-plot fp tn lvl = do
-  streams <- getStreams fp tn
-  let candles = map getSummaryCandleVals $ mapMaybe maybeSummaryLevel streams
-  plotListStyle [] (defaultStyle{plotType = CandleSticks}) candles
-
-zoomEither :: (Z.Stream a -> b) -> FilePath -> Z.TrackNo -> IO b
-zoomEither fun fp tn = do
-  cf <- Z.getCacheFile fp
-  let t = Z.getTrackType tn cf
-  case t of
-    Just Z.ZDouble -> I.fileDriverRandom
-                       (Z.mapTrack tn (fun :: Z.Stream Double -> IO ()))
-                       fp
-    Just Z.ZInt -> I.fileDriverRandom
-                       (Z.mapTrack tn (fun :: Z.Stream Int -> IO ()))
-                       fp
-    Nothing -> fail "Invalid Track"
 
 
-getStreams :: FilePath -> Z.TrackNo -> IO [Z.Stream a]
+instance C Z.TimeStamp where
+
+-- plot :: FilePath -> Z.TrackNo -> Int -> IO ()
+-- plot fp tn lvl = do
+--     streams <- getStreams fp tn
+--     let candles = map getSummaryCandleVals $
+--                     mapMaybe (maybeSummaryLevel lvl) streams
+--     plotListStyle [] (defaultStyle{plotType = CandleSticks}) candles
+
+plotSummaries :: C a => Int -> [Z.Stream a] -> IO ()
+plotSummaries lvl streams = plotListStyle []
+                        (defaultStyle{plotType = CandleSticks})
+                        candles
+  where
+    candles = map getSummaryCandleVals $
+                mapMaybe (maybeSummaryLevel lvl) streams
+
+-- zoomEither :: (Z.Stream a -> b) -> FilePath -> Z.TrackNo -> IO b
+-- zoomEither fun fp tn = do
+--   cf <- Z.getCacheFile fp
+--   let t = Z.getTrackType tn cf
+--   case t of
+--     Just Z.ZDouble -> I.fileDriverRandom
+--                        (Z.mapTrack tn (fun :: Z.Stream Double -> IO ()))
+--                        fp
+--     Just Z.ZInt -> I.fileDriverRandom
+--                        (Z.mapTrack tn (fun :: Z.Stream Int -> IO ()))
+--                        fp
+--     Nothing -> fail "Invalid Track"
+
+-- data SomeStreamList = forall a. (ZReadable a, C a)
+--     => SomeStreamList ([Z.Stream a])
+
+getStreams :: Z.ZReadable a => FilePath -> Z.TrackNo -> IO [Z.Stream a]
 getStreams fp tn =
     I.fileDriverRandom (I.joinI $ Z.enumStreamFromCF tn I.getChunks) fp
 
@@ -65,3 +82,4 @@ getSummaryCandleVals s = ( Z.summaryCloseTime s
                            , Z.summaryMax s
                            , Z.summaryClose s
                          ))
+
