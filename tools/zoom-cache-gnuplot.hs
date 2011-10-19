@@ -33,10 +33,12 @@ parseTrack arg =
 -- Options record, only gnuplot options for now
 data Options = Options
     { gnuplotOpts :: [Attribute]
+    , candleSticks :: [(FilePath, TrackNo, Int)]
     }
 
 defaultOptions = Options
     { gnuplotOpts = []
+    , candleSticks = []
     }
 
 parseCustom :: String -> Attribute
@@ -50,6 +52,13 @@ options =
         (OptArg ((\ f opts -> opts { gnuplotOpts = parseCustom f : gnuplotOpts opts }) . fromMaybe "gnuplot")
                              "KEY:VALUE")
         "gnuplot KEY:VALUE"
+    , Option ['c'] ["candlesticks"]
+        (OptArg ((\ f opts ->
+          opts { candleSticks = either (error "bad command line syntax")
+                                 (: candleSticks opts) $ parseTrack f  }) .
+                               fromMaybe "candlesticks")
+          "FILE:TRACKNO:SUMMARYLVL")
+        "candelsticks FILE:TRACKNO:SUMMARYLVL"
     ]
 
 parseOpts :: [String] -> IO (Options, [String])
