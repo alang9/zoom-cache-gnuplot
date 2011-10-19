@@ -72,21 +72,32 @@ parseOpts argv =
       (_, _, errs) -> ioError (userError (concat errs ++ usageInfo header options))
         where header = "Usage: zoom-cache-gnuplot ..."
 
+data SomeC = forall a. C a => SomeC a
+
+instance C SomeC where
+    text (SomeC a) = text a
+
 main :: IO ()
 main = do
     args <- getArgs
     (opts, remainder) <- parseOpts args
-    mapM_ (process opts) remainder
+    -- mapM_ (process opts) remainder
+    cPlots <- fmap catMaybes . mapM candleProcess $ candleSticks opts
+    let plots = cPlots
+    case plots of
+      [] -> error "Cannot produce empty plot"
+      _ -> plotListsStyle (gnuplotOpts opts) plots
   where
-    process :: Options -> String -> IO ()
-    process opts s = do
-        let (fp, tn, lvl) = either (error "badly formed argument") id $ parseTrack s
+    candleProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (PlotStyle, [SomeC]))
+    candleProcess (fp, tn, lvl) = do
         cf <- getCacheFile fp
         case getTrackType tn cf of
           Just ZInt -> do
               streams <- getStreams fp tn :: IO [Stream Int]
-              plotSummaries lvl streams $ gnuplotOpts opts
+              let (s, l) = candlePlots streams lvl
+              return $ Just (s, map SomeC l)
           Just ZDouble -> do
               streams <- getStreams fp tn :: IO [Stream Double]
-              plotSummaries lvl streams $ gnuplotOpts opts
-          Nothing -> return ()
+              let (s, l) = candlePlots streams lvl
+              return $ Just (s, map SomeC l)
+          Nothing -> return Nothing
