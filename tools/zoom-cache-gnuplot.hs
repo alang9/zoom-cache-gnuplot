@@ -8,10 +8,12 @@ import System.Environment (getArgs)
 import System.Console.GetOpt
 
 import Graphics.Gnuplot.Simple
+import Graphics.Gnuplot.Advanced
+
 import Graphics.Gnuplot.Value.Tuple (C(..))
 import Data.ZoomCache.Read (getTrackType, getCacheFile)
 import Data.Iteratee.ZoomCache (Stream)
-import Data.ZoomCache.Common (TrackType(..), TrackNo)
+import Data.ZoomCache.Common (TrackType(..), TrackNo, TimeStamp)
 
 import Data.ZoomCache.Gnuplot
 
@@ -49,6 +51,7 @@ parseCustom :: String -> Attribute
 parseCustom s =
     Custom s1 [tail s2]
       where (s1, s2) = break (==':') s
+
 
 options :: [OptDescr (Options -> Options)]
 options =
@@ -88,16 +91,21 @@ main = do
       [] -> error "Cannot produce empty plot"
       _ -> plotListsStyle (gnuplotOpts opts) plots
   where
-    candleProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (PlotStyle, [SomeC]))
+    candleProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (PlotStyle, [(TimeStamp, (Double, Double, Double, Double))]))
     candleProcess (fp, tn, lvl) = do
         cf <- getCacheFile fp
         case getTrackType tn cf of
           Just ZInt -> do
               streams <- getStreams fp tn :: IO [Stream Int]
               let (s, l) = candlePlots streams lvl
-              return $ Just (s, map SomeC l)
+              let l' = map (\(t,(a,b,c,d)) -> (t, ( realToFrac a
+                                                  , realToFrac b
+                                                  , realToFrac c
+                                                  , realToFrac d)
+                                               :: (Double, Double, Double, Double))) l
+              return $ Just (s, l')
           Just ZDouble -> do
               streams <- getStreams fp tn :: IO [Stream Double]
               let (s, l) = candlePlots streams lvl
-              return $ Just (s, map SomeC l)
+              return $ Just (s, l)
           Nothing -> return Nothing
