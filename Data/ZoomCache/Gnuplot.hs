@@ -13,6 +13,7 @@
 module Data.ZoomCache.Gnuplot
     ( plotSummaries
     , getStreams
+    , candlePlots
     ) where
 
 import Data.Maybe
@@ -31,6 +32,17 @@ singleton :: a -> [a]
 singleton = (:[])
 
 instance C Z.TimeStamp where text = singleton . shows . Z.unTS
+
+
+candlePlots :: C a => [Z.Stream a] -> Int
+            -> (PlotStyle, [(Z.TimeStamp, (a, a, a, a))])
+candlePlots streams lvl =
+    ( defaultStyle{plotType = CandleSticks}
+    , candles
+    )
+  where
+    candles = map getSummaryCandleVals $
+                mapMaybe (maybeSummaryLevel lvl) streams
 
 plotSummaries :: C a => Int -> [Z.Stream a] -> [Attribute] -> IO ()
 plotSummaries lvl streams attrs = plotListStyle attrs
