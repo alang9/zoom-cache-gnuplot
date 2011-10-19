@@ -1,12 +1,14 @@
+{-# LANGUAGE ExistentialQuantification #-}
 module Main (
     main
 ) where
 
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, catMaybes)
 import System.Environment (getArgs)
 import System.Console.GetOpt
 
 import Graphics.Gnuplot.Simple
+import Graphics.Gnuplot.Value.Tuple (C(..))
 import Data.ZoomCache.Read (getTrackType, getCacheFile)
 import Data.Iteratee.ZoomCache (Stream)
 import Data.ZoomCache.Common (TrackType(..), TrackNo)
@@ -34,11 +36,13 @@ parseTrack arg =
 data Options = Options
     { gnuplotOpts :: [Attribute]
     , candleSticks :: [(FilePath, TrackNo, Int)]
+    , avgs :: [(FilePath, TrackNo, Int)]
     }
 
 defaultOptions = Options
     { gnuplotOpts = []
     , candleSticks = []
+    , avgs = []
     }
 
 parseCustom :: String -> Attribute
