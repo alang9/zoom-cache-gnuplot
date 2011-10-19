@@ -50,17 +50,17 @@ main :: IO ()
 main = do
     args <- getArgs
     (opts, remainder) <- parseOpts args
-    mapM_ process remainder
+    mapM_ (process opts) remainder
   where
-    process :: String -> IO ()
-    process s = do
+    process :: Options -> String -> IO ()
+    process opts s = do
         let (fp, tn, lvl) = either (error "badly formed argument") id $ parseTrack s
         cf <- getCacheFile fp
         case getTrackType tn cf of
           Just ZInt -> do
               streams <- getStreams fp tn :: IO [Stream Int]
-              plotSummaries lvl streams
+              plotSummaries lvl streams $ gnuplotOpts opts
           Just ZDouble -> do
               streams <- getStreams fp tn :: IO [Stream Double]
-              plotSummaries lvl streams
+              plotSummaries lvl streams $ gnuplotOpts opts
           Nothing -> return ()

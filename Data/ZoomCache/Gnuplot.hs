@@ -32,8 +32,8 @@ singleton = (:[])
 
 instance C Z.TimeStamp where text = singleton . shows . Z.unTS
 
-plotSummaries :: C a => Int -> [Z.Stream a] -> IO ()
-plotSummaries lvl streams = plotListStyle []
+plotSummaries :: C a => Int -> [Z.Stream a] -> [Attribute] -> IO ()
+plotSummaries lvl streams attrs = plotListStyle attrs
                         (defaultStyle{plotType = CandleSticks})
                         candles
   where
