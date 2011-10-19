@@ -14,6 +14,7 @@ module Data.ZoomCache.Gnuplot
     ( plotSummaries
     , getStreams
     , candlePlots
+    , avgPlots
     ) where
 
 import Data.Maybe
@@ -43,6 +44,16 @@ candlePlots streams lvl =
   where
     candles = map getSummaryCandleVals $
                 mapMaybe (maybeSummaryLevel lvl) streams
+
+avgPlots :: C a => [Z.Stream a] -> Int
+         -> (PlotStyle, [(Z.TimeStamp, Double)])
+avgPlots streams lvl =
+    ( defaultStyle
+    , avgs
+    )
+  where
+    avgs = map getSummaryAvgs $
+             mapMaybe (maybeSummaryLevel lvl) streams
 
 plotSummaries :: C a => Int -> [Z.Stream a] -> [Attribute] -> IO ()
 plotSummaries lvl streams attrs = plotListStyle attrs
