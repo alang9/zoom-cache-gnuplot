@@ -3,11 +3,14 @@ module Main (
 ) where
 
 import System.Environment (getArgs)
+import System.Console.GetOpt
 
-import Data.ZoomCache.Gnuplot
+import Graphics.Gnuplot.Simple
 import Data.ZoomCache.Read (getTrackType, getCacheFile)
 import Data.Iteratee.ZoomCache (Stream)
 import Data.ZoomCache.Common (TrackType(..), TrackNo)
+
+import Data.ZoomCache.Gnuplot
 
 data ParseError = ParseError
 
