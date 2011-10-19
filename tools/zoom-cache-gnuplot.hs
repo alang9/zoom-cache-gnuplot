@@ -30,6 +30,21 @@ parseTrack arg =
                     where
                       (w, s'') = break (==':') s'
 
+
+-- Options record, only gnuplot options for now
+data Options = Options
+    { gnuplotOpts :: [Attribute]
+    }
+
+defaultOptions = Options
+    { gnuplotOpts = []
+    }
+
+parseCustom :: String -> Attribute
+parseCustom s =
+    Custom s1 [s2]
+      where (s1, s2) = break (=='=') s
+
 main :: IO ()
 main = do
     args <- getArgs
