@@ -43,10 +43,14 @@ parseCustom s =
     Custom s1 [s2]
       where (s1, s2) = break (=='=') s
 
+parseOpts :: [String] -> IO (Options, [String])
+parseOpts s = return (defaultOptions, s)
+
 main :: IO ()
 main = do
     args <- getArgs
-    mapM_ process args
+    (opts, remainder) <- parseOpts args
+    mapM_ process remainder
   where
     process :: String -> IO ()
     process s = do
