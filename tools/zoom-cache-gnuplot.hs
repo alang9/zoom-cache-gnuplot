@@ -1,4 +1,3 @@
-{-# LANGUAGE ExistentialQuantification #-}
 module Main (
     main
 ) where
@@ -75,10 +74,7 @@ parseOpts argv =
       (_, _, errs) -> ioError (userError (concat errs ++ usageInfo header options))
         where header = "Usage: zoom-cache-gnuplot ..."
 
-data SomeC = forall a. C a => SomeC a
 
-instance C SomeC where
-    text (SomeC a) = text a
 
 main :: IO ()
 main = do
