@@ -82,4 +82,3 @@ getSummaryCandleVals s = ( Z.summaryCloseTime s
                            , Z.summaryMax s
                            , Z.summaryClose s
                          ))
-
