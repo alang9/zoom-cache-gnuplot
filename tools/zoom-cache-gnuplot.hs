@@ -105,3 +105,14 @@ main = do
               let (s, l) = candlePlots streams lvl
               return $ Just (s, l)
           Nothing -> return Nothing
+    avgProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (PlotStyle, [(TimeStamp, Double)]))
+    avgProcess (fp, tn, lvl) = do
+        cf <- getCacheFile fp
+        case getTrackType tn cf of
+          Just ZInt -> do
+              streams <- getStreams fp tn :: IO [Stream Int]
+              return . Just $ avgPlots streams lvl
+          Just ZDouble -> do
+              streams <- getStreams fp tn :: IO [Stream Double]
+              return . Just $ avgPlots streams lvl
+          Nothing -> return Nothing
