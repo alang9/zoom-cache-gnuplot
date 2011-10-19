@@ -2,6 +2,7 @@ module Main (
     main
 ) where
 
+import Data.Maybe (fromMaybe)
 import System.Environment (getArgs)
 import System.Console.GetOpt
 
@@ -40,12 +41,16 @@ defaultOptions = Options
 
 parseCustom :: String -> Attribute
 parseCustom s =
-    Custom s1 [s2]
-      where (s1, s2) = break (=='=') s
+    Custom s1 [tail s2]
+      where (s1, s2) = break (==':') s
 
 options :: [OptDescr (Options -> Options)]
 options =
-    []
+    [ Option ['g'] ["gnuplot"]
+        (OptArg ((\ f opts -> opts { gnuplotOpts = parseCustom f : gnuplotOpts opts }) . fromMaybe "gnuplot")
+                             "KEY:VALUE")
+        "gnuplot KEY:VALUE"
+    ]
 
 parseOpts :: [String] -> IO (Options, [String])
 parseOpts argv =
