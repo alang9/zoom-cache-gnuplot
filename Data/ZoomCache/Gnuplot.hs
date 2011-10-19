@@ -25,9 +25,12 @@ import qualified Data.ZoomCache.Summary as Z
 import Graphics.Gnuplot.Value.Tuple
 import Graphics.Gnuplot.Simple
 
+----------------------------------------------------------------------
 
+singleton :: a -> [a]
+singleton = (:[])
 
-instance C Z.TimeStamp where
+instance C Z.TimeStamp where text = singleton . shows . Z.unTS
 
 -- plot :: FilePath -> Z.TrackNo -> Int -> IO ()
 -- plot fp tn lvl = do
