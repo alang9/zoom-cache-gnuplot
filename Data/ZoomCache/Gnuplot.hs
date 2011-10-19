@@ -32,13 +32,6 @@ singleton = (:[])
 
 instance C Z.TimeStamp where text = singleton . shows . Z.unTS
 
--- plot :: FilePath -> Z.TrackNo -> Int -> IO ()
--- plot fp tn lvl = do
---     streams <- getStreams fp tn
---     let candles = map getSummaryCandleVals $
---                     mapMaybe (maybeSummaryLevel lvl) streams
---     plotListStyle [] (defaultStyle{plotType = CandleSticks}) candles
-
 plotSummaries :: C a => Int -> [Z.Stream a] -> IO ()
 plotSummaries lvl streams = plotListStyle []
                         (defaultStyle{plotType = CandleSticks})
@@ -46,22 +39,6 @@ plotSummaries lvl streams = plotListStyle []
   where
     candles = map getSummaryCandleVals $
                 mapMaybe (maybeSummaryLevel lvl) streams
-
--- zoomEither :: (Z.Stream a -> b) -> FilePath -> Z.TrackNo -> IO b
--- zoomEither fun fp tn = do
---   cf <- Z.getCacheFile fp
---   let t = Z.getTrackType tn cf
---   case t of
---     Just Z.ZDouble -> I.fileDriverRandom
---                        (Z.mapTrack tn (fun :: Z.Stream Double -> IO ()))
---                        fp
---     Just Z.ZInt -> I.fileDriverRandom
---                        (Z.mapTrack tn (fun :: Z.Stream Int -> IO ()))
---                        fp
---     Nothing -> fail "Invalid Track"
-
--- data SomeStreamList = forall a. (ZReadable a, C a)
---     => SomeStreamList ([Z.Stream a])
 
 getStreams :: Z.ZReadable a => FilePath -> Z.TrackNo -> IO [Z.Stream a]
 getStreams fp tn =
