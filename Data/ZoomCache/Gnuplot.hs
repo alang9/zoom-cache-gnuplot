@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- |
 -- Module      : Data.ZoomCache.Gnuplot
 -- Copyright   : Alex Lang
@@ -15,6 +16,7 @@ module Data.ZoomCache.Gnuplot
     , candlePlotData
     , candlePlot
     , avgPlot
+    , mavgPlot
     ) where
 
 import Data.Maybe
@@ -61,10 +63,10 @@ avgPlot streams lvl =
 
 ----------------------------------------------------------------------
 
-data AvgQueue a = AvgQueue Int [a] [a] Int
+data AvgQueue = AvgQueue Int [Double] [Double] Int
 
-push :: Fractional a => a -> AvgQueue a
-     -> AvgQueue a
+push :: Double -> AvgQueue
+     -> AvgQueue
 push a (AvgQueue m [] [] _) = AvgQueue m [a] [] 1
 push a (AvgQueue m (x:xs) ys l)
     | m <= l    = AvgQueue m xs (a:ys) l
@@ -73,11 +75,24 @@ push a (AvgQueue m [] ys l)
     | l < m = AvgQueue m [] (a:ys) (l+1)
     | otherwise = push a (AvgQueue m (reverse ys) [] m)
 
-queueAvg (AvgQueue m xs ys l) = (sum xs + sum ys) / (realToFrac l)
+queueAvg :: AvgQueue -> Double
+queueAvg (AvgQueue m xs ys l) = realToFrac (sum xs + sum ys) / realToFrac l
 
-mavgPlot :: Atom.C a => [Z.Stream a] -> Int
-         -> Plot.T Z.TimeStamp Double
-mavgPlot streams lvl = undefined
+avgEmptyQueue m = AvgQueue m [] [] 0
+
+mavgPlot :: forall a. [Z.Stream a]
+         -> Int -> Plot.T Z.TimeStamp Double
+mavgPlot streams lvl = Plot.list Graph.lines . snd $
+                       foldl mavg (avgEmptyQueue 20, []) summaries
+  where
+    summaries :: [Z.Summary a]
+    summaries = mapMaybe (maybeSummaryLevel lvl) streams
+    mavg :: (AvgQueue, [(Z.TimeStamp, Double)]) -> Z.Summary a
+         -> (AvgQueue, [(Z.TimeStamp, Double)])
+    mavg (queue, l) s = (newQueue, (timeStamp, queueAvg newQueue):l)
+      where
+        (timeStamp, avg) = getSummaryAvgs s
+        newQueue = push avg queue
 
 ----------------------------------------------------------------------
 
@@ -99,9 +114,9 @@ getStreams fp tn =
 maybeSummaryLevel :: Int -> Z.Stream a -> Maybe (Z.Summary a)
 maybeSummaryLevel _ (Z.StreamPacket _ _ _) = Nothing
 maybeSummaryLevel lvl (Z.StreamSummary file tn sum) =
-    case Z.summaryLevel sum of
-      lvl -> Just sum
-      _   -> Nothing
+    case Z.summaryLevel sum == lvl of
+      True  -> Just sum
+      False -> Nothing
 maybeSummaryLevel _ Z.StreamNull = Nothing
 
 getSummaryCandleVals :: Z.Summary a -> ( Z.TimeStamp
