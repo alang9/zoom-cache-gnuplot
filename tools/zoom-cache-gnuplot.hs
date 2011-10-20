@@ -80,39 +80,39 @@ main :: IO ()
 main = do
     args <- getArgs
     (opts, remainder) <- parseOpts args
-    -- mapM_ (process opts) remainder
-    cPlots <- fmap catMaybes . mapM candleProcess $ candleSticks opts
-    let plots = cPlots
-    case plots of
-      [] -> error "Cannot produce empty plot"
-      _ -> plotListsStyle (gnuplotOpts opts) plots
+    cPlots <- fmap (mconcat . catMaybes) . mapM candleProcess $ candleSticks opts
+    aPlots <- fmap (mconcat . catMaybes) . mapM avgProcess $ avgs opts
+    let plots = cPlots `mappend` aPlots
+    exitWith =<< Plot.plot X11.cons plots
   where
-    candleProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (PlotStyle, [(TimeStamp, (Double, Double, Double, Double))]))
+    candleProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (Plot.T TimeStamp Double))
     candleProcess (fp, tn, lvl) = do
         cf <- getCacheFile fp
         case getTrackType tn cf of
           Just ZInt -> do
               streams <- getStreams fp tn :: IO [Stream Int]
-              let (s, l) = candlePlots streams lvl
-              let l' = map (\(t,(a,b,c,d)) -> (t, ( realToFrac a
-                                                  , realToFrac b
-                                                  , realToFrac c
-                                                  , realToFrac d)
-                                               :: (Double, Double, Double, Double))) l
-              return $ Just (s, l')
+              let cData = candlePlotData streams lvl
+                  cData' = map (\(t,(a,b,c,d))
+                                -> (t, ( realToFrac a
+                                       , realToFrac b
+                                       , realToFrac c
+                                       , realToFrac d)
+                                    :: (Double, Double, Double, Double)))
+                             cData
+              return . Just $ candlePlot cData'
           Just ZDouble -> do
               streams <- getStreams fp tn :: IO [Stream Double]
-              let (s, l) = candlePlots streams lvl
-              return $ Just (s, l)
+              let cData = candlePlotData streams lvl
+              return . Just $ candlePlot cData
           Nothing -> return Nothing
-    avgProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (PlotStyle, [(TimeStamp, Double)]))
+    avgProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (Plot.T TimeStamp Double))
     avgProcess (fp, tn, lvl) = do
         cf <- getCacheFile fp
         case getTrackType tn cf of
           Just ZInt -> do
               streams <- getStreams fp tn :: IO [Stream Int]
-              return . Just $ avgPlots streams lvl
+              return . Just $ avgPlot streams lvl
           Just ZDouble -> do
               streams <- getStreams fp tn :: IO [Stream Double]
-              return . Just $ avgPlots streams lvl
+              return . Just $ avgPlot streams lvl
           Nothing -> return Nothing
