@@ -52,12 +52,34 @@ candlePlot data_ =
     Plot.list Graph.candleSticks data_
 
 avgPlot :: Atom.C a => [Z.Stream a] -> Int
-         -> Plot.T Z.TimeStamp Double
+        -> Plot.T Z.TimeStamp Double
 avgPlot streams lvl =
     Plot.list Graph.lines avgs
   where
     avgs = map getSummaryAvgs $
              mapMaybe (maybeSummaryLevel lvl) streams
+
+----------------------------------------------------------------------
+
+data AvgQueue a = AvgQueue Int [a] [a] Int
+
+push :: Fractional a => a -> AvgQueue a
+     -> AvgQueue a
+push a (AvgQueue m [] [] _) = AvgQueue m [a] [] 1
+push a (AvgQueue m (x:xs) ys l)
+    | m <= l    = AvgQueue m xs (a:ys) l
+    | otherwise = AvgQueue m (x:xs) (a:ys) (l+1)
+push a (AvgQueue m [] ys l)
+    | l < m = AvgQueue m [] (a:ys) (l+1)
+    | otherwise = push a (AvgQueue m (reverse ys) [] m)
+
+queueAvg (AvgQueue m xs ys l) = (sum xs + sum ys) / (realToFrac l)
+
+mavgPlot :: Atom.C a => [Z.Stream a] -> Int
+         -> Plot.T Z.TimeStamp Double
+mavgPlot streams lvl = undefined
+
+----------------------------------------------------------------------
 
 -- plotSummaries :: Atom.C a => Int -> [Z.Stream a] -> [Attribute] -> IO ()
 -- plotSummaries lvl streams attrs = plotListStyle attrs
@@ -95,3 +117,4 @@ getSummaryAvgs :: Z.Summary a -> (Z.TimeStamp, Double)
 getSummaryAvgs s = ( Z.summaryCloseTime s
                    , Z.summaryAvg s
                    )
+
