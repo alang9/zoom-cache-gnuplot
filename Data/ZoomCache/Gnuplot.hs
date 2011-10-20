@@ -11,21 +11,25 @@
 ----------------------------------------------------------------------
 
 module Data.ZoomCache.Gnuplot
-    ( plotSummaries
-    , getStreams
-    , candlePlots
-    , avgPlots
+    ( getStreams
+    , candlePlotData
+    , candlePlot
+    , avgPlot
     ) where
 
 import Data.Maybe
-import qualified Data.Iteratee as I
 
+import qualified Data.Iteratee as I
 import qualified Data.Iteratee.ZoomCache as Z
 import qualified Data.ZoomCache.Common as Z
 import qualified Data.ZoomCache.Read as Z
 import qualified Data.ZoomCache.Summary as Z
-import Graphics.Gnuplot.Value.Tuple
+import Graphics.Gnuplot.Advanced
 import Graphics.Gnuplot.Simple
+import qualified Graphics.Gnuplot.Graph.TwoDimensional as Graph
+import qualified Graphics.Gnuplot.Plot.TwoDimensional as Plot
+import qualified Graphics.Gnuplot.Value.Atom as Atom
+import qualified Graphics.Gnuplot.Value.Tuple as Tuple
 
 ----------------------------------------------------------------------
 
@@ -78,7 +82,8 @@ maybeSummaryLevel lvl (Z.StreamSummary file tn sum) =
       _   -> Nothing
 maybeSummaryLevel _ Z.StreamNull = Nothing
 
-getSummaryCandleVals :: Z.Summary a -> (Z.TimeStamp, (a, a, a, a))
+getSummaryCandleVals :: Z.Summary a -> ( Z.TimeStamp
+                                       , (a, a, a, a))
 getSummaryCandleVals s = ( Z.summaryCloseTime s
                          , ( Z.summaryOpen s
                            , Z.summaryMin s

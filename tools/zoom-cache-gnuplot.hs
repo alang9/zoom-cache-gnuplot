@@ -3,18 +3,20 @@ module Main (
 ) where
 
 import Data.Maybe (fromMaybe, catMaybes)
+import Data.Monoid
 import System.Environment (getArgs)
+import System.Exit (exitWith)
 import System.Console.GetOpt
 
-import Graphics.Gnuplot.Simple
-import Graphics.Gnuplot.Advanced
-
-import Graphics.Gnuplot.Value.Tuple (C(..))
-import Data.ZoomCache.Read (getTrackType, getCacheFile)
 import Data.Iteratee.ZoomCache (Stream)
 import Data.ZoomCache.Common (TrackType(..), TrackNo, TimeStamp)
-
 import Data.ZoomCache.Gnuplot
+import Data.ZoomCache.Read (getTrackType, getCacheFile)
+import qualified Graphics.Gnuplot.Advanced as Plot
+import Graphics.Gnuplot.Simple
+import qualified Graphics.Gnuplot.Terminal.X11 as X11
+import Graphics.Gnuplot.Value.Tuple (C(..))
+import qualified Graphics.Gnuplot.Plot.TwoDimensional as Plot
 
 data ParseError = ParseError
 
@@ -71,9 +73,9 @@ parseOpts :: [String] -> IO (Options, [String])
 parseOpts argv =
     case getOpt Permute options argv of
       (o, n, []) -> return (foldl (flip id) defaultOptions o, n)
-      (_, _, errs) -> ioError (userError (concat errs ++ usageInfo header options))
+      (_, _, errs) -> ioError (userError (concat errs
+                                          ++ usageInfo header options))
         where header = "Usage: zoom-cache-gnuplot ..."
-
 
 
 main :: IO ()
