@@ -32,36 +32,36 @@ import Graphics.Gnuplot.Simple
 singleton :: a -> [a]
 singleton = (:[])
 
-instance C Z.TimeStamp where text = singleton . shows . Z.unTS
+instance Tuple.C Z.TimeStamp where
+    text = singleton . shows . Z.unTS
+instance Atom.C Z.TimeStamp where
 
-
-candlePlots :: C a => [Z.Stream a] -> Int
-            -> (PlotStyle, [(Z.TimeStamp, (a, a, a, a))])
-candlePlots streams lvl =
-    ( defaultStyle{plotType = CandleSticks}
-    , candles
-    )
-  where
-    candles = map getSummaryCandleVals $
+candlePlotData :: [Z.Stream a] -> Int
+               -> [(Z.TimeStamp, (a, a, a, a))]
+candlePlotData streams lvl =
+    map getSummaryCandleVals $
                 mapMaybe (maybeSummaryLevel lvl) streams
 
-avgPlots :: C a => [Z.Stream a] -> Int
-         -> (PlotStyle, [(Z.TimeStamp, Double)])
-avgPlots streams lvl =
-    ( defaultStyle
-    , avgs
-    )
+candlePlot :: (Tuple.C a, Atom.C a) => [(Z.TimeStamp, (a, a, a, a))]
+           -> Plot.T Z.TimeStamp a
+candlePlot data_ =
+    Plot.list Graph.candleSticks data_
+
+avgPlot :: Atom.C a => [Z.Stream a] -> Int
+         -> Plot.T Z.TimeStamp Double
+avgPlot streams lvl =
+    Plot.list Graph.lines avgs
   where
     avgs = map getSummaryAvgs $
              mapMaybe (maybeSummaryLevel lvl) streams
 
-plotSummaries :: C a => Int -> [Z.Stream a] -> [Attribute] -> IO ()
-plotSummaries lvl streams attrs = plotListStyle attrs
-                        (defaultStyle{plotType = CandleSticks})
-                        candles
-  where
-    candles = map getSummaryCandleVals $
-                mapMaybe (maybeSummaryLevel lvl) streams
+-- plotSummaries :: Atom.C a => Int -> [Z.Stream a] -> [Attribute] -> IO ()
+-- plotSummaries lvl streams attrs = plotListStyle attrs
+--                         (defaultStyle{plotType = CandleSticks})
+--                         candles
+--   where
+--     candles = map getSummaryCandleVals $
+--                 mapMaybe (maybeSummaryLevel lvl) streams
 
 getStreams :: Z.ZReadable a => FilePath -> Z.TrackNo -> IO [Z.Stream a]
 getStreams fp tn =
