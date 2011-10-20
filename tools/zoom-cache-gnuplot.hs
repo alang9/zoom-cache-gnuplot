@@ -99,12 +99,15 @@ main :: IO ()
 main = do
     args <- getArgs
     (opts, remainder) <- parseOpts args
-    cPlots <- fmap (mconcat . catMaybes) . mapM candleProcess $ candleSticks opts
+    cPlots <- fmap (mconcat . catMaybes) . mapM candleProcess $
+              candleSticks opts
     aPlots <- fmap (mconcat . catMaybes) . mapM avgProcess $ avgs opts
-    let plots = cPlots `mappend` aPlots
+    mPlots <- fmap (mconcat . catMaybes) . mapM mavgProcess $ mavgs opts
+    let plots = cPlots `mappend` aPlots `mappend` mPlots
     exitWith =<< Plot.plot (PNG.cons "test.png") plots
   where
-    candleProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (Plot.T TimeStamp Double))
+    candleProcess :: (FilePath, TrackNo, Int)
+                  -> IO (Maybe (Plot.T TimeStamp Double))
     candleProcess (fp, tn, lvl) = do
         cf <- getCacheFile fp
         case getTrackType tn cf of
@@ -124,7 +127,8 @@ main = do
               let cData = candlePlotData streams lvl
               return . Just $ candlePlot cData
           Nothing -> return Nothing
-    avgProcess :: (FilePath, TrackNo, Int) -> IO (Maybe (Plot.T TimeStamp Double))
+    avgProcess :: (FilePath, TrackNo, Int)
+               -> IO (Maybe (Plot.T TimeStamp Double))
     avgProcess (fp, tn, lvl) = do
         cf <- getCacheFile fp
         case getTrackType tn cf of
@@ -134,4 +138,14 @@ main = do
           Just ZDouble -> do
               streams <- getStreams fp tn :: IO [Stream Double]
               return . Just $ avgPlot streams lvl
+          Nothing -> return Nothing
+    mavgProcess (fp, tn, lvl) = do
+        cf <- getCacheFile fp
+        case getTrackType tn cf of
+          Just ZInt -> do
+              streams <- getStreams fp tn :: IO [Stream Int]
+              return . Just $ mavgPlot streams lvl
+          Just ZDouble -> do
+              streams <- getStreams fp tn :: IO [Stream Double]
+              return . Just $ mavgPlot streams lvl
           Nothing -> return Nothing
