@@ -21,6 +21,7 @@ module Data.ZoomCache.Gnuplot
 
 import Control.Arrow ((***))
 import Data.Maybe
+import Data.Monoid
 
 import qualified Data.Iteratee as I
 import qualified Data.Iteratee.ZoomCache as Z
@@ -59,30 +60,10 @@ avgPlot :: Atom.C a => [Z.Stream a] -> Int
 avgPlot streams lvl =
     Plot.list Graph.lines avgs
   where
-    avgs = map getSummaryAvgs $
+    avgs = map getSummaryAvg $
              mapMaybe (maybeSummaryLevel lvl) streams
 
 ----------------------------------------------------------------------
-
-data AvgQueue = AvgQueue Z.TimeStamp [(Z.TimeStamp, Double)] [(Z.TimeStamp, Double)] Int
-
-push :: (Z.TimeStamp, Double) -> AvgQueue
-     -> AvgQueue
-push a@(t,d) (AvgQueue m [] [] _)
-    = AvgQueue m [a] [] 1
-push a@(t,d) (AvgQueue m xs'@((oldT,oldD):xs) ys l)
-    | t - m > oldT = push (t,d) $ AvgQueue m xs ys (l-1)
-    | otherwise = AvgQueue m xs' (a:ys) (l+1)
-push a (AvgQueue m [] ys l)
-    = push a (AvgQueue m (reverse ys) [] l)
-
-queueAvg :: AvgQueue -> Double
-queueAvg (AvgQueue m xs ys l) = realToFrac (sum (map snd xs)
-                                            + sum (map snd ys))
-                                / realToFrac l
-
-avgEmptyQueue :: Z.TimeStamp -> AvgQueue
-avgEmptyQueue m = AvgQueue m [] [] 0
 
 instance Num Z.TimeStamp where
     a + b = Z.TS $ Z.unTS a + Z.unTS b
@@ -104,6 +85,28 @@ instance Integral Z.TimeStamp where
     quotRem a b = Z.TS *** Z.TS $ Z.unTS a `quotRem` Z.unTS b
     toInteger a = toInteger $ Z.unTS a
 
+----------------------------------------------------------------------
+
+data AvgQueue = AvgQueue Z.TimeStamp [(Z.TimeStamp, Double)] [(Z.TimeStamp, Double)] Int
+
+push :: (Z.TimeStamp, Double) -> AvgQueue
+     -> AvgQueue
+push a (AvgQueue m [] [] _)
+    = AvgQueue m [a] [] 1
+push a@(t,d) (AvgQueue m xs'@((oldT, _):xs) ys l)
+    | t - m > oldT = push (t,d) $ AvgQueue m xs ys (l-1)
+    | otherwise = AvgQueue m xs' (a:ys) (l+1)
+push a (AvgQueue m [] ys l)
+    = push a (AvgQueue m (reverse ys) [] l)
+
+queueAvg :: AvgQueue -> Double
+queueAvg (AvgQueue m xs ys l) = realToFrac (sum (map snd xs)
+                                            + sum (map snd ys))
+                                / realToFrac l
+
+avgEmptyQueue :: Z.TimeStamp -> AvgQueue
+avgEmptyQueue m = AvgQueue m [] [] 0
+
 totalTime :: [Z.Summary a] -> Maybe Z.TimeStamp
 totalTime [] = Nothing
 totalTime l = Just $ globalClose - globalOpen
@@ -124,13 +127,53 @@ mavgPlot streams lvl = Plot.list Graph.lines . snd $
          -> (AvgQueue, [(Z.TimeStamp, Double)])
     mavg (queue, l) s = (newQueue, (timeStamp, queueAvg newQueue):l)
       where
-        (timeStamp, avg) = getSummaryAvgs s
+        (timeStamp, avg) = getSummaryAvg s
         newQueue = push (timeStamp, avg) queue
 
+----------------------------------------------------------------------
 
-bollingerPlot :: [Z.Stream a] -> Int -> Plot.T Z.TimeStamp Double
-bollingerPlot streams lvl = Plot
+data BoundedQueue a = BoundedQueue Z.TimeStamp [(Z.TimeStamp, a)] [(Z.TimeStamp, a)] Int
 
+bqPush :: (Z.TimeStamp, a) -> BoundedQueue a
+     -> BoundedQueue a
+bqPush a (BoundedQueue m [] [] _)
+    = BoundedQueue m [a] [] 1
+bqPush a@(t, v) (BoundedQueue m xs'@((oldT, _):xs) ys l)
+    | t - m > oldT = bqPush (t, v) $ BoundedQueue m xs ys (l-1)
+    | otherwise = BoundedQueue m xs' (a:ys) (l+1)
+bqPush a (BoundedQueue m [] ys l)
+    = bqPush a (BoundedQueue m (reverse ys) [] l)
+
+queueAvgVar :: BoundedQueue (Double, Double) -> (Double, Double)
+queueAvgVar (BoundedQueue m xs ys l) =
+    (takeAverage *** takeAverage) . unzip $ map snd (xs ++ ys)
+    where
+      takeAverage :: [Double] -> Double
+      takeAverage = (/ realToFrac l) . sum
+
+emptyAvgVarQueue :: Z.TimeStamp -> BoundedQueue (Double, Double)
+emptyAvgVarQueue m = BoundedQueue m [] [] 0
+
+bollingerPlot :: forall a. [Z.Stream a] -> Int -> Plot.T Z.TimeStamp Double
+bollingerPlot streams lvl = mavg `mappend` upperBB `mappend` lowerBB
+  where
+    summaries :: [Z.Summary a]
+    summaries = mapMaybe (maybeSummaryLevel lvl) streams
+    window = (fromMaybe (error "Trying to draw an empty plot") $
+                        totalTime summaries) `div` Z.TS 10
+    avgsVars = map getSummaryAvgVar summaries
+    movingAvgsVars :: [(Z.TimeStamp, (Double, Double))]
+    movingAvgsVars = snd $ foldl folder (emptyAvgVarQueue window, []) avgsVars
+    mavg = Plot.list Graph.lines $ map (\(t, (m, s)) -> (t, m)) movingAvgsVars
+    upperBB = Plot.list Graph.lines $ map (\(t, (m, s)) -> (t, m+2*s)) movingAvgsVars
+    lowerBB = Plot.list Graph.lines $ map (\(t, (m, s)) -> (t, m-2*s)) movingAvgsVars
+    folder :: (BoundedQueue (Double, Double), [(Z.TimeStamp, (Double, Double))])
+           -> (Z.TimeStamp, Double, Double)
+           -> (BoundedQueue (Double, Double), [(Z.TimeStamp, (Double, Double))])
+    folder (queue, l) (timeStamp, avg, var) =
+        (newQueue, (timeStamp, queueAvgVar newQueue):l)
+      where
+        newQueue = bqPush (timeStamp, (avg, var)) queue
 
 ----------------------------------------------------------------------
 
@@ -167,8 +210,18 @@ getSummaryCandleVals s = ( (Z.summaryCloseTime s + Z.summaryOpenTime s)
                            , Z.summaryClose s
                          ))
 
-getSummaryAvgs :: Z.Summary a -> (Z.TimeStamp, Double)
-getSummaryAvgs s = ( ((Z.summaryCloseTime s) + (Z.summaryOpenTime s)) `div` 2
+getSummaryAvg :: Z.Summary a -> (Z.TimeStamp, Double)
+getSummaryAvg s = ( ((Z.summaryCloseTime s) + (Z.summaryOpenTime s)) `div` 2
                    , Z.summaryAvg s
                    )
 
+getSummaryAvgVar :: Z.Summary a -> (Z.TimeStamp, Double, Double)
+getSummaryAvgVar s = ( (openTime + closeTime) `div` 2
+                     , avg
+                     , (rms * rms) - (avg * avg)
+                     )
+  where
+    avg = Z.summaryAvg s
+    rms = Z.summaryRMS s
+    openTime = Z.summaryOpenTime s
+    closeTime = Z.summaryCloseTime s
