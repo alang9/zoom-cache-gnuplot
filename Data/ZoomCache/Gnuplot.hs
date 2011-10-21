@@ -64,22 +64,24 @@ avgPlot streams lvl =
 
 ----------------------------------------------------------------------
 
-data AvgQueue = AvgQueue Int [Double] [Double] Int
+data AvgQueue = AvgQueue Z.TimeStamp [(Z.TimeStamp, Double)] [(Z.TimeStamp, Double)] Int
 
-push :: Double -> AvgQueue
+push :: (Z.TimeStamp, Double) -> AvgQueue
      -> AvgQueue
-push a (AvgQueue m [] [] _) = AvgQueue m [a] [] 1
-push a (AvgQueue m (x:xs) ys l)
-    | m <= l    = AvgQueue m xs (a:ys) l
-    | otherwise = AvgQueue m (x:xs) (a:ys) (l+1)
+push a@(t,d) (AvgQueue m [] [] _)
+    = AvgQueue m [a] [] 1
+push a@(t,d) (AvgQueue m xs'@((oldT,oldD):xs) ys l)
+    | t - m > oldT = push (t,d) $ AvgQueue m xs ys (l-1)
+    | otherwise = AvgQueue m xs' (a:ys) (l+1)
 push a (AvgQueue m [] ys l)
-    | l < m = AvgQueue m [] (a:ys) (l+1)
-    | otherwise = push a (AvgQueue m (reverse ys) [] m)
+    = push a (AvgQueue m (reverse ys) [] l)
 
 queueAvg :: AvgQueue -> Double
-queueAvg (AvgQueue m xs ys l) = realToFrac (sum xs + sum ys) / realToFrac l
+queueAvg (AvgQueue m xs ys l) = realToFrac (sum (map snd xs)
+                                            + sum (map snd ys))
+                                / realToFrac l
 
-avgEmptyQueue :: Int -> AvgQueue
+avgEmptyQueue :: Z.TimeStamp -> AvgQueue
 avgEmptyQueue m = AvgQueue m [] [] 0
 
 instance Num Z.TimeStamp where
@@ -104,21 +106,30 @@ instance Integral Z.TimeStamp where
 
 totalTime :: [Z.Summary a] -> Maybe Z.TimeStamp
 totalTime [] = Nothing
-totalTime l = Just $ Z.summaryCloseTime (last l) - Z.summaryOpenTime (head l)
+totalTime l = Just $ globalClose - globalOpen
+  where
+    globalClose = Z.summaryCloseTime (last l)
+    globalOpen = Z.summaryOpenTime (head l)
 
 mavgPlot :: forall a. [Z.Stream a]
          -> Int -> Plot.T Z.TimeStamp Double
 mavgPlot streams lvl = Plot.list Graph.lines . snd $
-                       foldl mavg (avgEmptyQueue 20, []) summaries
+                       foldl mavg (avgEmptyQueue window, []) summaries
   where
     summaries :: [Z.Summary a]
     summaries = mapMaybe (maybeSummaryLevel lvl) streams
+    window = (fromMaybe (error "Trying to draw an empty plot") $
+                        totalTime summaries) `div` Z.TS 10
     mavg :: (AvgQueue, [(Z.TimeStamp, Double)]) -> Z.Summary a
          -> (AvgQueue, [(Z.TimeStamp, Double)])
     mavg (queue, l) s = (newQueue, (timeStamp, queueAvg newQueue):l)
       where
         (timeStamp, avg) = getSummaryAvgs s
-        newQueue = push avg queue
+        newQueue = push (timeStamp, avg) queue
+
+
+bollingerPlot :: [Z.Stream a] -> Int -> Plot.T Z.TimeStamp Double
+bollingerPlot streams lvl = Plot
 
 
 ----------------------------------------------------------------------
@@ -148,7 +159,8 @@ maybeSummaryLevel _ Z.StreamNull = Nothing
 
 getSummaryCandleVals :: Z.Summary a -> ( Z.TimeStamp
                                        , (a, a, a, a))
-getSummaryCandleVals s = ( Z.summaryCloseTime s
+getSummaryCandleVals s = ( (Z.summaryCloseTime s + Z.summaryOpenTime s)
+                             `div` 2
                          , ( Z.summaryOpen s
                            , Z.summaryMin s
                            , Z.summaryMax s
