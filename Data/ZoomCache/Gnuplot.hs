@@ -19,6 +19,7 @@ module Data.ZoomCache.Gnuplot
     , mavgPlot
     ) where
 
+import Control.Arrow ((***))
 import Data.Maybe
 
 import qualified Data.Iteratee as I
@@ -78,7 +79,32 @@ push a (AvgQueue m [] ys l)
 queueAvg :: AvgQueue -> Double
 queueAvg (AvgQueue m xs ys l) = realToFrac (sum xs + sum ys) / realToFrac l
 
+avgEmptyQueue :: Int -> AvgQueue
 avgEmptyQueue m = AvgQueue m [] [] 0
+
+instance Num Z.TimeStamp where
+    a + b = Z.TS $ Z.unTS a + Z.unTS b
+    a - b = Z.TS $ Z.unTS a - Z.unTS b
+    a * b = Z.TS $ Z.unTS a * Z.unTS b
+    negate a = Z.TS . negate $ Z.unTS a
+    abs a = Z.TS . abs $ Z.unTS a
+    signum a = Z.TS . signum $ Z.unTS a
+    fromInteger i = Z.TS $ fromInteger i
+
+instance Real Z.TimeStamp where
+    toRational a = toRational $ Z.unTS a
+
+instance Enum Z.TimeStamp where
+    toEnum i = Z.TS $ toEnum i
+    fromEnum a = fromEnum $ Z.unTS a
+
+instance Integral Z.TimeStamp where
+    quotRem a b = Z.TS *** Z.TS $ Z.unTS a `quotRem` Z.unTS b
+    toInteger a = toInteger $ Z.unTS a
+
+totalTime :: [Z.Summary a] -> Maybe Z.TimeStamp
+totalTime [] = Nothing
+totalTime l = Just $ Z.summaryCloseTime (last l) - Z.summaryOpenTime (head l)
 
 mavgPlot :: forall a. [Z.Stream a]
          -> Int -> Plot.T Z.TimeStamp Double
@@ -93,6 +119,7 @@ mavgPlot streams lvl = Plot.list Graph.lines . snd $
       where
         (timeStamp, avg) = getSummaryAvgs s
         newQueue = push avg queue
+
 
 ----------------------------------------------------------------------
 
@@ -129,7 +156,7 @@ getSummaryCandleVals s = ( Z.summaryCloseTime s
                          ))
 
 getSummaryAvgs :: Z.Summary a -> (Z.TimeStamp, Double)
-getSummaryAvgs s = ( Z.summaryCloseTime s
+getSummaryAvgs s = ( ((Z.summaryCloseTime s) + (Z.summaryOpenTime s)) `div` 2
                    , Z.summaryAvg s
                    )
 
