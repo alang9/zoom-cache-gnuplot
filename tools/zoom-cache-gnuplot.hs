@@ -2,16 +2,20 @@ module Main (
     main
 ) where
 
-import Data.Maybe (fromMaybe, catMaybes)
+import Control.Applicative
+import Data.ByteString (ByteString)
+import Data.Maybe (fromMaybe, catMaybes, mapMaybe)
 import Data.Monoid
 import System.Environment (getArgs)
 import System.Exit (exitWith)
 import System.Console.GetOpt
 
+import qualified Data.Iteratee as I
+import Data.Iteratee (Iteratee(..), getChunks, fileDriverRandom)
 import Data.Iteratee.ZoomCache (Stream)
-import Data.ZoomCache.Common (TrackType(..), TrackNo, TimeStamp)
+import Data.ZoomCache
+
 import Data.ZoomCache.Gnuplot
-import Data.ZoomCache.Read (getTrackType, getCacheFile)
 import qualified Graphics.Gnuplot.Advanced as Plot
 import Graphics.Gnuplot.Simple
 import qualified Graphics.Gnuplot.Terminal.PNG as PNG
@@ -35,6 +39,20 @@ parseTrack arg =
                     where
                       (w, s'') = break (==':') s'
 
+parseTrack2 :: String -> Either ParseError (FilePath, TrackNo)
+parseTrack2 arg =
+    case w of
+      [w1, w2] -> Right (w1, read w2)
+      _ ->  Left ParseError
+  where
+    w = words arg
+    words :: String -> [String]
+    words s = case dropWhile (==':') s of
+                "" -> []
+                s' -> w : words s''
+                    where
+                      (w, s'') = break (==':') s'
+
 
 -- Options record, only gnuplot options for now
 data Options = Options
@@ -42,6 +60,8 @@ data Options = Options
     , candleSticks :: [(FilePath, TrackNo, Int)]
     , avgs :: [(FilePath, TrackNo, Int)]
     , mavgs :: [(FilePath, TrackNo, Int)]
+    , bbs :: [(FilePath, TrackNo, Int)]
+    , ls :: [(FilePath, TrackNo)]
     }
 
 defaultOptions = Options
@@ -49,6 +69,8 @@ defaultOptions = Options
     , candleSticks = []
     , avgs = []
     , mavgs = []
+    , bbs = []
+    , ls = []
     }
 
 parseCustom :: String -> Attribute
@@ -57,6 +79,8 @@ parseCustom s =
       where (s1, s2) = break (==':') s
 
 
+
+-- Code needs to be abstracted and factored here
 options :: [OptDescr (Options -> Options)]
 options =
     [ Option ['g'] ["gnuplot"]
@@ -73,17 +97,31 @@ options =
     , Option ['a'] ["avg"]
         (OptArg ((\ f opts ->
           opts { avgs = either (error "bad command line syntax")
-                                 (: candleSticks opts) $ parseTrack f }) .
+                                 (: avgs opts) $ parseTrack f }) .
                                fromMaybe "avg")
           "FILE:TRACKNO:SUMMARYLVL")
         "avg FILE:TRACKNO:SUMMARYLVL"
     , Option ['m'] ["mavg"]
         (OptArg ((\ f opts ->
           opts { mavgs = either (error "bad command line syntax")
-                                 (: candleSticks opts) $ parseTrack f }) .
+                                 (: mavgs opts) $ parseTrack f }) .
                                fromMaybe "mavg")
           "FILE:TRACKNO:SUMMARYLVL")
         "mavg FILE:TRACKNO:SUMMARYLVL"
+    , Option ['b'] ["bollinger"]
+        (OptArg ((\ f opts ->
+          opts { bbs = either (error "bad command line syntax")
+                                 (: bbs opts) $ parseTrack f }) .
+                               fromMaybe "bollinger")
+          "FILE:TRACKNO:SUMMARYLVL")
+        "bollinger FILE:TRACKNO:SUMMARYLVL"
+    , Option ['l'] ["lines"]
+        (OptArg ((\ f opts ->
+          opts { ls = either (error "bad command line syntax")
+                                 (: ls opts) $ parseTrack2 f }) .
+                               fromMaybe "lines")
+          "FILE:TRACKNO")
+        "lines FILE:TRACKNO"
     ]
 
 parseOpts :: [String] -> IO (Options, [String])
@@ -94,58 +132,73 @@ parseOpts argv =
                                           ++ usageInfo header options))
         where header = "Usage: zoom-cache-gnuplot ..."
 
+candleProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
+candleProcess (fp, tn, lvl) = fileDriverRandom iter fp
+  where
+    iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
+    iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
+        streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+        let cData = candlePlotData streams
+        return $ candlePlot cData
+
+avgProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
+avgProcess (fp, tn, lvl) = fileDriverRandom iter fp
+  where
+    iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
+    iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
+        streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+        return $ avgPlot streams
+
+mavgProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
+mavgProcess (fp, tn, lvl) = fileDriverRandom iter fp
+  where
+    iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
+    iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
+      streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+      return $ mavgPlot streams
+
+bollingerProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
+bollingerProcess (fp, tn, lvl) = fileDriverRandom iter fp
+  where
+    iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
+    iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
+      streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+      return $ bollingerPlot streams
+
+lineProcess :: (FilePath, TrackNo) -> IO (Plot.T TimeStamp Double)
+lineProcess (fp, tn) = fileDriverRandom iter fp
+  where
+    iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
+    iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
+      streams <- mapMaybe (isPacket tn) <$> getChunks
+      return $ linePlot streams
+
+isSumLvl :: TrackNo -> Int -> Stream -> Maybe ZoomSummary
+isSumLvl tn lvl str =
+    case str of
+      StreamPacket{} -> Nothing
+      StreamNull -> Nothing
+      StreamSummary _ tn' zsum@(ZoomSummary sum) ->
+          if tn == tn' && summaryLevel sum == lvl then Just zsum else Nothing
+
+isPacket :: TrackNo -> Stream -> Maybe Packet
+isPacket tn str =
+    case str of
+      StreamSummary{} -> Nothing
+      StreamNull -> Nothing
+      StreamPacket _ tn' p ->
+          if tn == tn' then Just p else Nothing
 
 main :: IO ()
 main = do
     args <- getArgs
     (opts, remainder) <- parseOpts args
-    cPlots <- fmap (mconcat . catMaybes) . mapM candleProcess $
+    cPlots <- fmap mconcat . mapM candleProcess $
               candleSticks opts
-    aPlots <- fmap (mconcat . catMaybes) . mapM avgProcess $ avgs opts
-    mPlots <- fmap (mconcat . catMaybes) . mapM mavgProcess $ mavgs opts
-    let plots = cPlots `mappend` aPlots `mappend` mPlots
+    aPlots <- fmap mconcat . mapM avgProcess $ avgs opts
+    mPlots <- fmap mconcat . mapM mavgProcess $ mavgs opts
+    bPlots <- fmap mconcat . mapM bollingerProcess $ bbs opts
+    lPlots <- fmap mconcat . mapM lineProcess $ ls opts
+    let plots = mconcat [cPlots, aPlots, mPlots, bPlots, lPlots]
     exitWith =<< Plot.plot (PNG.cons "test.png") plots
-  where
-    candleProcess :: (FilePath, TrackNo, Int)
-                  -> IO (Maybe (Plot.T TimeStamp Double))
-    candleProcess (fp, tn, lvl) = do
-        cf <- getCacheFile fp
-        case getTrackType tn cf of
-          Just ZInt -> do
-              streams <- getStreams fp tn :: IO [Stream Int]
-              let cData = candlePlotData streams lvl
-                  cData' = map (\(t,(a,b,c,d))
-                                -> (t, ( realToFrac a
-                                       , realToFrac b
-                                       , realToFrac c
-                                       , realToFrac d)
-                                    :: (Double, Double, Double, Double)))
-                             cData
-              return . Just $ candlePlot cData'
-          Just ZDouble -> do
-              streams <- getStreams fp tn :: IO [Stream Double]
-              let cData = candlePlotData streams lvl
-              return . Just $ candlePlot cData
-          Nothing -> return Nothing
-    avgProcess :: (FilePath, TrackNo, Int)
-               -> IO (Maybe (Plot.T TimeStamp Double))
-    avgProcess (fp, tn, lvl) = do
-        cf <- getCacheFile fp
-        case getTrackType tn cf of
-          Just ZInt -> do
-              streams <- getStreams fp tn :: IO [Stream Int]
-              return . Just $ avgPlot streams lvl
-          Just ZDouble -> do
-              streams <- getStreams fp tn :: IO [Stream Double]
-              return . Just $ avgPlot streams lvl
-          Nothing -> return Nothing
-    mavgProcess (fp, tn, lvl) = do
-        cf <- getCacheFile fp
-        case getTrackType tn cf of
-          Just ZInt -> do
-              streams <- getStreams fp tn :: IO [Stream Int]
-              return . Just $ mavgPlot streams lvl
-          Just ZDouble -> do
-              streams <- getStreams fp tn :: IO [Stream Double]
-              return . Just $ mavgPlot streams lvl
-          Nothing -> return Nothing
+
