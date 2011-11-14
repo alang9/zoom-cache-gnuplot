@@ -29,13 +29,13 @@ import Control.Monad
 import Data.Maybe
 import Data.ByteString (ByteString)
 import Data.Monoid
+import Data.Typeable (cast)
 import Debug.Trace
 
 import qualified Data.Iteratee as I
 import Data.ZoomCache as Z
 import Data.ZoomCache.Numeric.Types as Z
 import Graphics.Gnuplot.Advanced
-import Graphics.Gnuplot.Simple
 import qualified Graphics.Gnuplot.Graph.TwoDimensional as Graph
 import qualified Graphics.Gnuplot.Plot.TwoDimensional as Plot
 import qualified Graphics.Gnuplot.Value.Atom as Atom
@@ -73,7 +73,7 @@ linePlot = Plot.list Graph.lines . concat . map pToTD
   where
     pToTD (Packet _ _ _ _ pData pTS) = zip pTS $ extract pData
     extract :: ZoomRaw -> [Double]
-    extract (ZoomRaw l) = unsafeCoerce l
+    extract (ZoomRaw l) =  mapMaybe cast l
 
 ----------------------------------------------------------------------
 
