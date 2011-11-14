@@ -232,6 +232,3 @@ main = do
       Left e -> throwIO e
       Right p ->
           exitWith =<< p plots
-
-
-
