@@ -1,14 +1,20 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Main (
     main
 ) where
 
 import Control.Applicative
+import Control.Exception
 import Data.ByteString (ByteString)
+import Data.Char (toLower)
 import Data.Maybe (fromMaybe, catMaybes, mapMaybe)
 import Data.Monoid
+import Data.Typeable
+import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitWith)
-import System.Console.GetOpt
+import System.FilePath.Posix
 
 import qualified Data.Iteratee as I
 import Data.Iteratee (Iteratee(..), getChunks, fileDriverRandom)
@@ -19,6 +25,8 @@ import Data.ZoomCache.Gnuplot
 import qualified Graphics.Gnuplot.Advanced as Plot
 import Graphics.Gnuplot.Simple
 import qualified Graphics.Gnuplot.Terminal.PNG as PNG
+import qualified Graphics.Gnuplot.Terminal.PostScript as PostScript
+import qualified Graphics.Gnuplot.Terminal.SVG as SVG
 import qualified Graphics.Gnuplot.Terminal.X11 as X11
 import Graphics.Gnuplot.Value.Tuple (C(..))
 import qualified Graphics.Gnuplot.Plot.TwoDimensional as Plot
@@ -189,6 +197,21 @@ isPacket tn str =
       StreamPacket _ tn' p ->
           if tn == tn' then Just p else Nothing
 
+data UnrecognisedFormatException = UnrecognisedFormatException
+    deriving (Show, Typeable)
+
+instance Exception UnrecognisedFormatException
+
+--Can't write the type signature for this because the appropriate type classes
+--are not exposed.
+getPlotter Nothing = Right $ Plot.plot X11.cons
+getPlotter (Just fp) =
+    case map toLower $ takeExtension fp of
+      ".png" -> Right . Plot.plot $ PNG.cons fp
+      ".svg" -> Right . Plot.plot $ SVG.cons fp
+      ".ps"  -> Right . Plot.plot $ PostScript.cons fp
+      _      -> Left UnrecognisedFormatException
+
 main :: IO ()
 main = do
     args <- getArgs
@@ -200,5 +223,15 @@ main = do
     bPlots <- fmap mconcat . mapM bollingerProcess $ bbs opts
     lPlots <- fmap mconcat . mapM lineProcess $ ls opts
     let plots = mconcat [cPlots, aPlots, mPlots, bPlots, lPlots]
-    exitWith =<< Plot.plot (PNG.cons "test.png") plots
+        plotter =
+            case remainder of
+              [] -> getPlotter Nothing
+              x:[] -> getPlotter $ Just x
+              _ -> error "too many output arguments"
+    case plotter of
+      Left e -> throwIO e
+      Right p ->
+          exitWith =<< p plots
+
+
 

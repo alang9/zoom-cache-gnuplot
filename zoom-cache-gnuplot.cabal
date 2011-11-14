@@ -49,7 +49,7 @@ Library
   Exposed-modules:      Data.ZoomCache.Gnuplot
   Build-Depends: base,
                  bytestring,
-                 zoom-cache >= 0.5,
+                 zoom-cache >= 0.6,
                  gnuplot,
                  iteratee
 
@@ -58,6 +58,7 @@ Executable zoom-cache-gnuplot
   Main-is:    zoom-cache-gnuplot.hs
   Hs-Source-Dirs: ., tools
   Build-Depends: base,
+                 filepath,
                  zoom-cache >= 0.5,
                  gnuplot,
                  iteratee
