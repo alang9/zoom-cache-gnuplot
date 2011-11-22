@@ -17,7 +17,7 @@ import System.Exit (exitWith)
 import System.FilePath.Posix
 
 import qualified Data.Iteratee as I
-import Data.Iteratee (Iteratee(..), getChunks, fileDriverRandom)
+import Data.Iteratee (Iteratee(..), stream2stream, fileDriverRandom)
 import Data.Iteratee.ZoomCache (Stream)
 import Data.ZoomCache
 
@@ -145,7 +145,7 @@ candleProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-        streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+        streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
         let cData = candlePlotData streams
         return $ candlePlot cData
 
@@ -154,7 +154,7 @@ avgProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-        streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+        streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
         return $ avgPlot streams
 
 mavgProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
@@ -162,7 +162,7 @@ mavgProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+      streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
       return $ mavgPlot streams
 
 bollingerProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
@@ -170,7 +170,7 @@ bollingerProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      streams <- mapMaybe (isSumLvl tn lvl) <$> getChunks
+      streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
       return $ bollingerPlot streams
 
 lineProcess :: (FilePath, TrackNo) -> IO (Plot.T TimeStamp Double)
@@ -178,14 +178,13 @@ lineProcess (fp, tn) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      streams <- mapMaybe (isPacket tn) <$> getChunks
+      streams <- mapMaybe (isPacket tn) <$> stream2stream
       return $ linePlot streams
 
 isSumLvl :: TrackNo -> Int -> Stream -> Maybe ZoomSummary
 isSumLvl tn lvl str =
     case str of
       StreamPacket{} -> Nothing
-      StreamNull -> Nothing
       StreamSummary _ tn' zsum@(ZoomSummary sum) ->
           if tn == tn' && summaryLevel sum == lvl then Just zsum else Nothing
 
@@ -193,7 +192,6 @@ isPacket :: TrackNo -> Stream -> Maybe Packet
 isPacket tn str =
     case str of
       StreamSummary{} -> Nothing
-      StreamNull -> Nothing
       StreamPacket _ tn' p ->
           if tn == tn' then Just p else Nothing
 
