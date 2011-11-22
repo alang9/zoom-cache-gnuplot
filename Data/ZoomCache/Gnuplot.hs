@@ -30,7 +30,6 @@ import Data.Functor ((<$>))
 import Data.Maybe
 import Data.ByteString (ByteString)
 import Data.Monoid
-import Data.Typeable (cast)
 import Debug.Trace
 
 import qualified Data.Iteratee as I
@@ -53,19 +52,19 @@ instance Tuple.C TimeStamp where
     text = singleton . shows . Z.unTS
 instance Atom.C TimeStamp where
 
-candlePlotData :: [ZoomSummary]
+candlePlotData :: [Summary Double]
                -> [(Z.TimeStamp, (Double, Double, Double, Double))]
 candlePlotData zsums =
-    mapMaybe getSummaryCandleVals zsums
+    map getSummaryCandleVals zsums
 
 candlePlot :: (Tuple.C a, Atom.C a) => [(Z.TimeStamp, (a, a, a, a))]
            -> Plot.T Z.TimeStamp a
 candlePlot data_ = Plot.list Graph.candleSticks data_
 
-avgPlot :: [ZoomSummary] -> Plot.T Z.TimeStamp Double
+avgPlot :: [Summary Double] -> Plot.T Z.TimeStamp Double
 avgPlot zsums = Plot.list Graph.lines avgs
   where
-    avgs = mapMaybe getSummaryAvg zsums
+    avgs = map getSummaryAvg zsums
 
 ----------------------------------------------------------------------
 
@@ -116,25 +115,23 @@ queueAvg (AvgQueue m xs ys l) = realToFrac (sum (map snd xs)
 avgEmptyQueue :: Z.TimeStamp -> AvgQueue
 avgEmptyQueue m = AvgQueue m [] [] 0
 
-totalTime :: [ZoomSummary] -> Maybe Z.TimeStamp
+totalTime :: [Summary Double] -> Maybe Z.TimeStamp
 totalTime [] = Nothing
 totalTime l = Just $ globalClose - globalOpen
   where
-    globalClose = case last l of
-                    ZoomSummary s -> Z.summaryExitTime s
-    globalOpen = case head l of
-                   ZoomSummary s -> Z.summaryEntryTime s
+    globalClose = Z.summaryExitTime $ last l
+    globalOpen = Z.summaryEntryTime $ head l
 
-mavgPlot :: forall a. [ZoomSummary] -> Plot.T Z.TimeStamp Double
+mavgPlot :: forall a. [Summary Double] -> Plot.T Z.TimeStamp Double
 mavgPlot zsums = Plot.list Graph.lines . snd $
                        foldl mavg (avgEmptyQueue window, []) zsums
   where
     window = (fromMaybe (error "Trying to draw an empty plot") $
                         totalTime zsums) `div` Z.TS 10
-    mavg :: (AvgQueue, [(Z.TimeStamp, Double)]) -> ZoomSummary
+    mavg :: (AvgQueue, [(Z.TimeStamp, Double)]) -> Summary Double
          -> (AvgQueue, [(Z.TimeStamp, Double)])
-    mavg (queue, l) zs@(ZoomSummary s) =
-        maybe (queue, l) update $ getSummaryAvg zs
+    mavg (queue, l) dsum =
+        update $ getSummaryAvg dsum
       where
         update (timeStamp, avg) = (newQueue, (timeStamp, queueAvg newQueue):l)
           where
@@ -173,12 +170,12 @@ queueAvgVar (BoundedQueue _ xs ys) =
 emptyAvgVarQueue :: Z.TimeStamp -> BoundedQueue (Double, Double)
 emptyAvgVarQueue m = BoundedQueue m [] []
 
-bollingerPlot :: forall a. [ZoomSummary] -> Plot.T Z.TimeStamp Double
-bollingerPlot zsums = mavg `mappend` upperBB `mappend` lowerBB
+bollingerPlot :: forall a. [Summary Double] -> Plot.T Z.TimeStamp Double
+bollingerPlot dsums = mavg `mappend` upperBB `mappend` lowerBB
   where
     window = (fromMaybe (error "Trying to draw an empty plot") $
-                        totalTime zsums) `div` Z.TS 10
-    avgsVars = mapMaybe getSummaryAvgVar zsums
+                        totalTime dsums) `div` Z.TS 10
+    avgsVars = map getSummaryAvgVar dsums
     movingAvgsVars :: [(Z.TimeStamp, (Double, Double))]
     movingAvgsVars = snd $ foldl folder (emptyAvgVarQueue window, []) avgsVars
     mavg = Plot.list Graph.lines $ map (\(t, (m, s)) -> (t, m)) movingAvgsVars
@@ -222,53 +219,45 @@ maybeSummaryLevel lvl (StreamSummary file tn zs@(ZoomSummary s)) =
       True  -> Just zs
       False -> Nothing
 
-getSummaryCandleVals :: ZoomSummary
-                     -> Maybe (Z.TimeStamp, (Double, Double, Double, Double))
-getSummaryCandleVals (ZoomSummary summary) =
-    getPoint <$> cast summary
+getSummaryCandleVals :: Summary Double
+                     -> (Z.TimeStamp, (Double, Double, Double, Double))
+getSummaryCandleVals dsum =
+    ( (openT + closeT) `div` 2
+    , ( Z.numEntry sData
+      , Z.numMin   sData
+      , Z.numMax   sData
+      , Z.numExit  sData
+      )
+    )
   where
-    getPoint dsum = ( (openT + closeT) `div` 2
-                    , ( Z.numEntry sData
-                      , Z.numMin   sData
-                      , Z.numMax   sData
-                      , Z.numExit  sData
-                      )
-                    )
-      where
-        sData = summaryData dsum
-    openT = Z.summaryEntryTime summary
-    closeT = Z.summaryExitTime summary
+    sData = summaryData dsum
+    openT = Z.summaryEntryTime dsum
+    closeT = Z.summaryExitTime dsum
 
-getSummaryAvg :: ZoomSummary -> Maybe (Z.TimeStamp, Double)
-getSummaryAvg (ZoomSummary summary) =
-    getPoint <$> cast summary
+getSummaryAvg :: Summary Double -> (Z.TimeStamp, Double)
+getSummaryAvg dsum =
+    ( (openT + closeT) `div` 2
+    , Z.numAvg $ Z.summaryData dsum
+    )
   where
-    openT = summaryEntryTime summary
-    closeT = summaryExitTime summary
-    getPoint :: Summary Double -> (Z.TimeStamp, Double)
-    getPoint dsum = ( (openT + closeT) `div` 2
-                    , Z.numAvg $ Z.summaryData dsum
-                    )
+    openT = summaryEntryTime dsum
+    closeT = summaryExitTime dsum
 
-
-getSummaryAvgVar :: ZoomSummary
-                 -> Maybe (Z.TimeStamp, Z.TimeStamp, Double, Double)
-getSummaryAvgVar (ZoomSummary summary) =
-    getPoint <$> cast summary
+getSummaryAvgVar :: Summary Double
+                 -> (Z.TimeStamp, Z.TimeStamp, Double, Double)
+getSummaryAvgVar dsum =
+    ( openTime
+    , closeTime
+    , avg
+    , var
+    )
   where
-    getPoint :: Summary Double -> (Z.TimeStamp, Z.TimeStamp, Double, Double)
-    getPoint dsum = ( openTime
-                    , closeTime
-                    , avg
-                    , var
-                    )
-      where
-        sData = summaryData dsum
-        avg = Z.numAvg sData
-        rms = Z.numRMS sData
-        openTime = Z.summaryEntryTime summary
-        closeTime = Z.summaryExitTime summary
-        var = (rms * rms) - (avg * avg)
+    sData = summaryData dsum
+    avg = Z.numAvg sData
+    rms = Z.numRMS sData
+    openTime = Z.summaryEntryTime dsum
+    closeTime = Z.summaryExitTime dsum
+    var = (rms * rms) - (avg * avg)
 
 -- data ZoomNumDict a where
 --     ZoomNumDict :: ZoomNum a => ZoomNumDict a

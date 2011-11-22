@@ -144,8 +144,8 @@ candleProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-        streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
-        let cData = candlePlotData streams
+        dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+        let cData = candlePlotData dsums
         return $ candlePlot cData
 
 avgProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
@@ -153,24 +153,24 @@ avgProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-        streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
-        return $ avgPlot streams
+        dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+        return $ avgPlot dsums
 
 mavgProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
 mavgProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
-      return $ mavgPlot streams
+      dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+      return $ mavgPlot dsums
 
 bollingerProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
 bollingerProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      streams <- mapMaybe (isSumLvl tn lvl) <$> stream2stream
-      return $ bollingerPlot streams
+      dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+      return $ bollingerPlot dsums
 
 lineProcess :: (FilePath, TrackNo) -> IO (Plot.T TimeStamp Double)
 lineProcess (fp, tn) = fileDriverRandom iter fp
