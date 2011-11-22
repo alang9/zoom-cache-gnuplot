@@ -69,12 +69,8 @@ avgPlot zsums = Plot.list Graph.lines avgs
 
 ----------------------------------------------------------------------
 
-linePlot :: [Packet] -> Plot.T Z.TimeStamp Double
-linePlot = Plot.list Graph.lines . concat . map pToTD
-  where
-    pToTD (Packet _ _ _ _ pData pTS) = zip pTS $ extract pData
-    extract :: ZoomRaw -> [Double]
-    extract (ZoomRaw l) =  mapMaybe cast l
+linePlot :: [(Z.TimeStamp, Double)] -> Plot.T Z.TimeStamp Double
+linePlot = Plot.list Graph.lines
 
 ----------------------------------------------------------------------
 
@@ -214,7 +210,7 @@ bollingerPlot zsums = mavg `mappend` upperBB `mappend` lowerBB
 getStreams :: FilePath -> Z.TrackNo -> IO [Z.Stream]
 getStreams fp tn =
     flip I.fileDriverRandom fp $
-             (I.joinI $ (enumCacheFile standardIdentifiers :: I.Enumeratee ByteString Stream IO [Stream]) I.getChunks)
+             (I.joinI $ (enumCacheFile standardIdentifiers :: I.Enumeratee ByteString [Stream] IO [Stream]) I.stream2stream)
 
 -- As things stand, we are doing too much processing after running the
 -- iteratee. Most of it can be moved before.
@@ -225,7 +221,6 @@ maybeSummaryLevel lvl (StreamSummary file tn zs@(ZoomSummary s)) =
     case Z.summaryLevel s == lvl of
       True  -> Just zs
       False -> Nothing
-maybeSummaryLevel _ Z.StreamNull = Nothing
 
 getSummaryCandleVals :: ZoomSummary
                      -> Maybe (Z.TimeStamp, (Double, Double, Double, Double))
