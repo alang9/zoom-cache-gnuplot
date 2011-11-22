@@ -69,12 +69,8 @@ avgPlot zsums = Plot.list Graph.lines avgs
 
 ----------------------------------------------------------------------
 
-linePlot :: [Packet] -> Plot.T Z.TimeStamp Double
-linePlot = Plot.list Graph.lines . concat . map pToTD
-  where
-    pToTD (Packet _ _ _ _ pData pTS) = zip pTS $ extract pData
-    extract :: ZoomRaw -> [Double]
-    extract (ZoomRaw l) =  mapMaybe cast l
+linePlot :: [(Z.TimeStamp, Double)] -> Plot.T Z.TimeStamp Double
+linePlot = Plot.list Graph.lines
 
 ----------------------------------------------------------------------
 

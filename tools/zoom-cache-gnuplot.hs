@@ -15,11 +15,10 @@ import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitWith)
 import System.FilePath.Posix
-
 import qualified Data.Iteratee as I
 import Data.Iteratee (Iteratee(..), stream2stream, fileDriverRandom)
 import Data.Iteratee.ZoomCache (Stream)
-import Data.ZoomCache
+import Data.ZoomCache.Numeric
 
 import Data.ZoomCache.Gnuplot
 import qualified Graphics.Gnuplot.Advanced as Plot
@@ -177,9 +176,9 @@ lineProcess :: (FilePath, TrackNo) -> IO (Plot.T TimeStamp Double)
 lineProcess (fp, tn) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
-    iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      streams <- mapMaybe (isPacket tn) <$> stream2stream
-      return $ linePlot streams
+    iter = I.joinI . enumCacheFile standardIdentifiers $
+                     (I.joinI . filterTracks [tn] .
+                      I.joinI . enumDouble $ (linePlot <$> stream2stream))
 
 isSumLvl :: TrackNo -> Int -> Stream -> Maybe ZoomSummary
 isSumLvl tn lvl str =
@@ -187,13 +186,6 @@ isSumLvl tn lvl str =
       StreamPacket{} -> Nothing
       StreamSummary _ tn' zsum@(ZoomSummary sum) ->
           if tn == tn' && summaryLevel sum == lvl then Just zsum else Nothing
-
-isPacket :: TrackNo -> Stream -> Maybe Packet
-isPacket tn str =
-    case str of
-      StreamSummary{} -> Nothing
-      StreamPacket _ tn' p ->
-          if tn == tn' then Just p else Nothing
 
 data UnrecognisedFormatException = UnrecognisedFormatException
     deriving (Show, Typeable)
