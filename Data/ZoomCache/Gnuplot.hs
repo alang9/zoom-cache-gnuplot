@@ -207,7 +207,7 @@ bollingerPlot dsums = mavg `mappend` upperBB `mappend` lowerBB
 getStreams :: FilePath -> Z.TrackNo -> IO [Z.Stream]
 getStreams fp tn =
     flip I.fileDriverRandom fp $
-             (I.joinI $ (enumCacheFile standardIdentifiers :: I.Enumeratee ByteString [Stream] IO [Stream]) I.stream2stream)
+             (I.joinI $ (enumCacheFile standardIdentifiers) I.stream2stream)
 
 -- As things stand, we are doing too much processing after running the
 -- iteratee. Most of it can be moved before.

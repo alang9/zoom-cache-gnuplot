@@ -16,7 +16,7 @@ import System.Environment (getArgs)
 import System.Exit (exitWith)
 import System.FilePath.Posix
 import qualified Data.Iteratee as I
-import Data.Iteratee (Iteratee(..), stream2stream, fileDriverRandom)
+import Data.Iteratee (Iteratee(..), stream2stream, fileDriverRandom, (><>))
 import Data.Iteratee.ZoomCache (Stream)
 import Data.ZoomCache.Numeric
 
@@ -144,7 +144,7 @@ candleProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-        dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+        dsums <- I.joinI $ (filterTracks [tn] ><> enumSummaryDouble lvl) stream2stream
         let cData = candlePlotData dsums
         return $ candlePlot cData
 
@@ -153,7 +153,7 @@ avgProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-        dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+        dsums <- I.joinI $ (filterTracks [tn] ><> enumSummaryDouble lvl) stream2stream
         return $ avgPlot dsums
 
 mavgProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
@@ -161,7 +161,7 @@ mavgProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+      dsums <- I.joinI $ (filterTracks [tn] ><> enumSummaryDouble lvl) stream2stream
       return $ mavgPlot dsums
 
 bollingerProcess :: (FilePath, TrackNo, Int) -> IO (Plot.T TimeStamp Double)
@@ -169,7 +169,7 @@ bollingerProcess (fp, tn, lvl) = fileDriverRandom iter fp
   where
     iter :: Iteratee ByteString IO (Plot.T TimeStamp Double)
     iter = I.joinI . (enumCacheFile standardIdentifiers) $ do
-      dsums <- I.joinI . filterTracks [tn] . I.joinI . enumSummaryDouble lvl $ stream2stream
+      dsums <- I.joinI $ (filterTracks [tn] ><> enumSummaryDouble lvl) stream2stream
       return $ bollingerPlot dsums
 
 lineProcess :: (FilePath, TrackNo) -> IO (Plot.T TimeStamp Double)
