@@ -8,7 +8,7 @@ import Control.Applicative
 import Control.Exception
 import Data.ByteString (ByteString)
 import Data.Char (toLower)
-import Data.Maybe (fromMaybe, catMaybes, mapMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Typeable
 import System.Console.GetOpt
@@ -17,7 +17,6 @@ import System.Exit (exitWith)
 import System.FilePath.Posix
 import qualified Data.Iteratee as I
 import Data.Iteratee (Iteratee(..), stream2stream, fileDriverRandom, (><>))
-import Data.Iteratee.ZoomCache (Stream)
 import Data.ZoomCache.Numeric
 
 import Data.ZoomCache.Gnuplot
@@ -27,7 +26,6 @@ import qualified Graphics.Gnuplot.Terminal.PNG as PNG
 import qualified Graphics.Gnuplot.Terminal.PostScript as PostScript
 import qualified Graphics.Gnuplot.Terminal.SVG as SVG
 import qualified Graphics.Gnuplot.Terminal.X11 as X11
-import Graphics.Gnuplot.Value.Tuple (C(..))
 import qualified Graphics.Gnuplot.Plot.TwoDimensional as Plot
 
 data ParseError = ParseError
@@ -42,9 +40,9 @@ parseTrack arg =
     words :: String -> [String]
     words s = case dropWhile (==':') s of
                 "" -> []
-                s' -> w : words s''
+                s' -> w' : words s''
                     where
-                      (w, s'') = break (==':') s'
+                      (w', s'') = break (==':') s'
 
 parseTrack2 :: String -> Either ParseError (FilePath, TrackNo)
 parseTrack2 arg =
@@ -71,6 +69,7 @@ data Options = Options
     , ls :: [(FilePath, TrackNo)]
     }
 
+defaultOptions :: Options
 defaultOptions = Options
     { gnuplotOpts = []
     , candleSticks = []
@@ -84,8 +83,6 @@ parseCustom :: String -> Attribute
 parseCustom s =
     Custom s1 [tail s2]
       where (s1, s2) = break (==':') s
-
-
 
 -- Code needs to be abstracted and factored here
 options :: [OptDescr (Options -> Options)]
@@ -179,13 +176,6 @@ lineProcess (fp, tn) = fileDriverRandom iter fp
     iter = I.joinI . enumCacheFile standardIdentifiers $
                      (I.joinI . filterTracks [tn] .
                       I.joinI . enumDouble $ (linePlot <$> stream2stream))
-
-isSumLvl :: TrackNo -> Int -> Stream -> Maybe ZoomSummary
-isSumLvl tn lvl str =
-    case str of
-      StreamPacket{} -> Nothing
-      StreamSummary _ tn' zsum@(ZoomSummary sum) ->
-          if tn == tn' && summaryLevel sum == lvl then Just zsum else Nothing
 
 data UnrecognisedFormatException = UnrecognisedFormatException
     deriving (Show, Typeable)

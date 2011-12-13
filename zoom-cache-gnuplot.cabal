@@ -47,19 +47,21 @@ Cabal-version:       >=1.2
 
 Library
   Exposed-modules:      Data.ZoomCache.Gnuplot
+  GHC-Options: -Wall
   Build-Depends: base,
                  bytestring,
-                 zoom-cache >= 0.8,
+                 zoom-cache >= 0.9, zoom-cache < 1.0,
                  gnuplot,
                  iteratee
 
 Executable zoom-cache-gnuplot
   -- .hs or .lhs file containing the Main module.
   Main-is:    zoom-cache-gnuplot.hs
+  GHC-Options: -Wall
   Hs-Source-Dirs: ., tools
   Build-Depends: base,
                  filepath,
-                 zoom-cache >= 0.8,
+                 zoom-cache >= 0.9, zoom-cache < 1.0,
                  gnuplot,
                  iteratee
   
