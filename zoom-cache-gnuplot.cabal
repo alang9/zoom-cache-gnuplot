@@ -50,7 +50,7 @@ Library
   GHC-Options: -Wall
   Build-Depends: base,
                  bytestring,
-                 zoom-cache >= 0.9, zoom-cache < 1.0,
+                 zoom-cache >= 0.9, zoom-cache < 1.1,
                  gnuplot,
                  iteratee
 
@@ -61,7 +61,7 @@ Executable zoom-cache-gnuplot
   Hs-Source-Dirs: ., tools
   Build-Depends: base,
                  filepath,
-                 zoom-cache >= 0.9, zoom-cache < 1.0,
+                 zoom-cache >= 0.9, zoom-cache < 1.1,
                  gnuplot,
                  iteratee
   
